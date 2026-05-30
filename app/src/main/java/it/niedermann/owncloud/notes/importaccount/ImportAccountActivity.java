@@ -135,7 +135,7 @@ public class ImportAccountActivity extends AppCompatActivity {
                             if(status.count > 0) {
                                 binding.progressCircular.setIndeterminate(false);
                             }
-                            binding.progressText.setText(getString(R.string.progress_import, status.count + 1, status.total));
+                            binding.progressText.setText(getString(R.string.progress_import, Math.min(status.count + 1, status.total), status.total));
                             binding.progressCircular.setProgress(status.count);
                             binding.progressCircular.setMax(status.total);
                         }));
