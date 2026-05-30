@@ -326,11 +326,15 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
     @NonNull
     private BaseNoteFragment getNoteFragmentForType(long accountId, long noteId, @NonNull NoteContentClassifier.EditorType type) {
         switch (type) {
+            case SIMPLE -> {
+                return SimpleNoteEditFragment.newInstance(accountId, noteId);
+            }
             case ADVANCED -> {
                 // honor the user's preferred markdown view-mode (edit / preview / direct edit)
                 return getNoteFragment(accountId, noteId, null);
             }
             default -> {
+                // LIST: placeholder until ListNoteEditFragment exists
                 return NoteEditFragment.newInstance(accountId, noteId);
             }
         }
@@ -341,7 +345,10 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
         final var mode = getPreferenceMode(getAccountId());
         final var prefValueDirectEdit = getString(R.string.pref_value_mode_direct_edit);
 
-        // TODO: route SIMPLE -> SimpleNoteEditFragment and LIST -> ListNoteEditFragment once implemented.
+        // TODO: route LIST -> ListNoteEditFragment once implemented.
+        if (editorType == NoteContentClassifier.EditorType.SIMPLE) {
+            return SimpleNoteEditFragment.newInstanceWithNewNote(newNote);
+        }
         if (editorType == NoteContentClassifier.EditorType.ADVANCED && mode.equals(prefValueDirectEdit)) {
             return NoteDirectEditFragment.newInstanceWithNewNote(newNote);
         }
