@@ -183,6 +183,28 @@
                         app:iconTint="@color/defaultBrand"
                         tools:visibility="visible" />
 
+                    <ImageView
+                        android:id="@+id/shareAvatar"
+                        android:layout_width="@dimen/note_shared_icon_size"
+                        android:layout_height="@dimen/note_shared_icon_size"
+                        android:layout_marginStart="@dimen/spacer_1x"
+                        android:contentDescription="@string/menu_shared_note"
+                        android:visibility="gone"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/shareCount"
+                        android:layout_width="@dimen/note_shared_icon_size"
+                        android:layout_height="@dimen/note_shared_icon_size"
+                        android:layout_marginStart="@dimen/spacer_1x"
+                        android:background="@drawable/share_count_ring"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:textColor="?android:textColorPrimary"
+                        android:textSize="@dimen/secondary_font_size"
+                        android:visibility="gone"
+                        tools:text="3" />
+
                 </LinearLayout>
             </LinearLayout>
 

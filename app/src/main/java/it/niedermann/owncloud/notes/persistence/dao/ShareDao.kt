@@ -31,4 +31,7 @@ interface ShareDao {
 
     @Query("DELETE FROM share_table WHERE id = :id")
     fun deleteById(id: Int)
+
+    @Query("SELECT * FROM share_table WHERE share_with IS NOT NULL AND share_with != ''")
+    fun getAllUserShares(): List<ShareEntity>
 }

@@ -34,8 +34,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.card.MaterialCardView;
 import com.nextcloud.android.common.ui.theme.utils.ColorRole;
+import com.nextcloud.android.sso.helper.SingleAccountHelper;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,7 +57,9 @@ import it.niedermann.owncloud.notes.main.items.list.NoteViewListHolder;
 import it.niedermann.owncloud.notes.main.items.section.SectionItem;
 import it.niedermann.owncloud.notes.main.items.section.SectionViewHolder;
 import it.niedermann.owncloud.notes.persistence.NotesRepository;
+import it.niedermann.owncloud.notes.persistence.entity.Account;
 import it.niedermann.owncloud.notes.persistence.entity.Note;
+import it.niedermann.owncloud.notes.share.helper.AvatarLoader;
 import it.niedermann.owncloud.notes.shared.model.Item;
 import it.niedermann.owncloud.notes.shared.model.NoteClickListener;
 import it.niedermann.owncloud.notes.shared.util.NoteContentClassifier;
@@ -85,16 +89,22 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
     private boolean isMultiSelect = false;
 
     private final NotesRepository repo;
+    private final Context context;
     private final ExecutorService classifyExecutor = Executors.newSingleThreadExecutor();
     private final Handler classifyMainHandler = new Handler(Looper.getMainLooper());
     // Cache of the inferred editor type per note id; cleared whenever the list is refreshed.
     private final Map<Long, NoteContentClassifier.EditorType> typeCache = new ConcurrentHashMap<>();
+    // Note title -> the user ids it is shared with; rebuilt from the local share table.
+    private volatile Map<String, List<String>> shareesByTitle = new HashMap<>();
+    @Nullable
+    private volatile Account currentAccount;
 
     public <T extends Context & NoteClickListener> ItemAdapter(@NonNull T context, boolean gridView) {
         this.noteClickListener = context;
         this.gridView = gridView;
         this.color = ContextCompat.getColor(context, R.color.defaultBrand);
         this.repo = NotesRepository.getInstance(context.getApplicationContext());
+        this.context = context.getApplicationContext();
         final var sp = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
         this.fontSize = getFontSizeFromPreferences(context, sp);
         this.monospace = sp.getBoolean(context.getString(R.string.pref_key_font), false);
@@ -236,8 +246,77 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
                     isSelected, (Note) itemList.get(position), showCategory, color, searchQuery
                 );
                 applyTypeIcon(holder.itemView, (Note) itemList.get(position));
+                applyShareIndicator(holder.itemView, (Note) itemList.get(position), position);
             }
         }
+    }
+
+    /**
+     * Shows the sharee's avatar for a note shared with one user, or a ring with the count for
+     * several. Notes shared only via a public link keep the generic {@code noteShared} icon.
+     */
+    private void applyShareIndicator(@NonNull View itemView, @NonNull Note note, int position) {
+        if (!(itemView.findViewById(R.id.shareAvatar) instanceof ImageView avatar)
+                || !(itemView.findViewById(R.id.shareCount) instanceof TextView countBadge)) {
+            return;
+        }
+        final List<String> sharees = shareesByTitle.get(note.getTitle());
+        if (sharees == null || sharees.isEmpty()) {
+            avatar.setVisibility(View.GONE);
+            countBadge.setVisibility(View.GONE);
+            return;
+        }
+        if (sharees.size() == 1 && currentAccount != null) {
+            countBadge.setVisibility(View.GONE);
+            avatar.setVisibility(View.VISIBLE);
+            avatar.setOnClickListener(v -> noteClickListener.openShare(position));
+            AvatarLoader.INSTANCE.load(avatar.getContext(), avatar, currentAccount, sharees.get(0));
+        } else {
+            avatar.setVisibility(View.GONE);
+            countBadge.setVisibility(View.VISIBLE);
+            countBadge.setText(String.valueOf(sharees.size()));
+            countBadge.setOnClickListener(v -> noteClickListener.openShare(position));
+        }
+    }
+
+    /** Rebuilds the per-note sharee map (and the current account) from the local share table. */
+    public void reloadShares() {
+        if (classifyExecutor.isShutdown()) {
+            return;
+        }
+        classifyExecutor.submit(() -> {
+            final Map<String, List<String>> byTitle = new HashMap<>();
+            for (final var share : repo.getAllUserShares()) {
+                final String path = share.getPath();
+                final String user = share.getShare_with();
+                if (path == null || user == null) {
+                    continue;
+                }
+                String name = path.substring(path.lastIndexOf('/') + 1);
+                final int dot = name.lastIndexOf('.');
+                if (dot > 0) {
+                    name = name.substring(0, dot);
+                }
+                final List<String> users = byTitle.computeIfAbsent(name, k -> new ArrayList<>());
+                if (!users.contains(user)) {
+                    users.add(user);
+                }
+            }
+            Account account = null;
+            try {
+                account = repo.getAccountByName(SingleAccountHelper.getCurrentSingleSignOnAccount(context).name);
+            } catch (Exception ignored) {
+                // keep the previously loaded account
+            }
+            final Account loadedAccount = account;
+            classifyMainHandler.post(() -> {
+                shareesByTitle = byTitle;
+                if (loadedAccount != null) {
+                    currentAccount = loadedAccount;
+                }
+                notifyDataSetChanged();
+            });
+        });
     }
 
     /**

@@ -100,6 +100,7 @@ import it.niedermann.owncloud.notes.edit.category.CategoryDialogFragment;
 import it.niedermann.owncloud.notes.exception.ExceptionDialogFragment;
 import it.niedermann.owncloud.notes.exception.IntendedOfflineException;
 import it.niedermann.owncloud.notes.importaccount.ImportAccountActivity;
+import it.niedermann.owncloud.notes.share.repository.ShareRepository;
 import it.niedermann.owncloud.notes.main.items.ItemAdapter;
 import it.niedermann.owncloud.notes.main.items.grid.GridItemDecoration;
 import it.niedermann.owncloud.notes.main.items.list.NotesListViewItemTouchHelper;
@@ -463,6 +464,7 @@ public class MainActivity extends LockedActivity implements NoteClickListener, A
                         @Override
                         public void onSuccess(Void v) {
                             Log.d(TAG, "Successfully synchronized notes for " + currentAccount.getAccountName());
+                            syncShares();
                         }
 
                         @Override
@@ -484,6 +486,22 @@ public class MainActivity extends LockedActivity implements NoteClickListener, A
     protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
         mainViewModel.restoreInstanceState();
+    }
+
+    /**
+     * Fetches the current shares from the server into the local share table, then refreshes the
+     * list so notes shared with a user get their share indicator.
+     */
+    private void syncShares() {
+        executor.submit(() -> {
+            try {
+                final var ssoAccount = SingleAccountHelper.getCurrentSingleSignOnAccount(this);
+                new ShareRepository(getApplicationContext(), ssoAccount).fetchSharesForNotesAndSaveShareEntities();
+                runOnUiThread(adapter::reloadShares);
+            } catch (Exception e) {
+                Log.w(TAG, "Could not sync note shares", e);
+            }
+        });
     }
 
     private void handleEcosystemIntent(Intent intent) {

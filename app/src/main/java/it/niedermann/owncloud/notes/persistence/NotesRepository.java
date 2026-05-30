@@ -1007,6 +1007,10 @@ public class NotesRepository {
         db.getShareDao().addShareEntities(entities);
     }
 
+    public List<ShareEntity> getAllUserShares() {
+        return db.getShareDao().getAllUserShares();
+    }
+
     public ShareEntity getShareByPathAndDisplayName(@NonNull OCShare share) {
         if (share.getPath() == null || share.getSharedWithDisplayName() == null) {
             return null;
