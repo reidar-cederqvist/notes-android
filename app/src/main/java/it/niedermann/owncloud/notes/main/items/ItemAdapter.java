@@ -10,6 +10,8 @@ import static it.niedermann.owncloud.notes.shared.util.NoteUtil.getFontSizeFromP
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
@@ -17,6 +19,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.IntRange;
@@ -24,6 +27,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.core.content.ContextCompat;
+import androidx.core.widget.TextViewCompat;
 import androidx.preference.PreferenceManager;
 import androidx.recyclerview.selection.SelectionTracker;
 import androidx.recyclerview.widget.RecyclerView;
@@ -32,7 +36,11 @@ import com.google.android.material.card.MaterialCardView;
 import com.nextcloud.android.common.ui.theme.utils.ColorRole;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import it.niedermann.owncloud.notes.R;
 import it.niedermann.owncloud.notes.branding.Branded;
@@ -46,9 +54,11 @@ import it.niedermann.owncloud.notes.main.items.grid.NoteViewGridHolderOnlyTitle;
 import it.niedermann.owncloud.notes.main.items.list.NoteViewListHolder;
 import it.niedermann.owncloud.notes.main.items.section.SectionItem;
 import it.niedermann.owncloud.notes.main.items.section.SectionViewHolder;
+import it.niedermann.owncloud.notes.persistence.NotesRepository;
 import it.niedermann.owncloud.notes.persistence.entity.Note;
 import it.niedermann.owncloud.notes.shared.model.Item;
 import it.niedermann.owncloud.notes.shared.model.NoteClickListener;
+import it.niedermann.owncloud.notes.shared.util.NoteContentClassifier;
 
 public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> implements Branded {
 
@@ -74,10 +84,17 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
 
     private boolean isMultiSelect = false;
 
+    private final NotesRepository repo;
+    private final ExecutorService classifyExecutor = Executors.newSingleThreadExecutor();
+    private final Handler classifyMainHandler = new Handler(Looper.getMainLooper());
+    // Cache of the inferred editor type per note id; cleared whenever the list is refreshed.
+    private final Map<Long, NoteContentClassifier.EditorType> typeCache = new HashMap<>();
+
     public <T extends Context & NoteClickListener> ItemAdapter(@NonNull T context, boolean gridView) {
         this.noteClickListener = context;
         this.gridView = gridView;
         this.color = ContextCompat.getColor(context, R.color.defaultBrand);
+        this.repo = NotesRepository.getInstance(context.getApplicationContext());
         final var sp = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
         this.fontSize = getFontSizeFromPreferences(context, sp);
         this.monospace = sp.getBoolean(context.getString(R.string.pref_key_font), false);
@@ -102,6 +119,7 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
         this.itemList.clear();
         this.itemList.addAll(itemList);
         this.swipedPosition = null;
+        typeCache.clear();
         notifyDataSetChanged();
     }
 
@@ -217,8 +235,57 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
                 ((NoteViewHolder) holder).bind(
                     isSelected, (Note) itemList.get(position), showCategory, color, searchQuery
                 );
+                applyTypeIcon(holder.itemView, (Note) itemList.get(position));
             }
         }
+    }
+
+    /**
+     * Shows a small icon to the left of the title indicating which editor a note opens in
+     * (checklist / markdown; plain notes get none). The grid does not load note content, so the
+     * type is classified lazily off the main thread for each visible card and cached by note id.
+     */
+    private void applyTypeIcon(@NonNull View itemView, @NonNull Note note) {
+        if (!(itemView.findViewById(R.id.noteTitle) instanceof TextView title)) {
+            return;
+        }
+        final long id = note.getId();
+        title.setTag(R.id.noteTitle, id);
+        final var cached = typeCache.get(id);
+        if (cached != null) {
+            setTitleIcon(title, cached);
+            return;
+        }
+        setTitleIcon(title, null);
+        classifyExecutor.submit(() -> {
+            final Note full = repo.getNoteById(id);
+            if (full == null) {
+                return;
+            }
+            final var type = NoteContentClassifier.classify(full.getContent());
+            typeCache.put(id, type);
+            classifyMainHandler.post(() -> {
+                if (title.getTag(R.id.noteTitle) instanceof Long shownId && shownId == id) {
+                    setTitleIcon(title, type);
+                }
+            });
+        });
+    }
+
+    private void setTitleIcon(@NonNull TextView title, @Nullable NoteContentClassifier.EditorType type) {
+        final int res;
+        if (type == NoteContentClassifier.EditorType.LIST) {
+            res = R.drawable.ic_baseline_checklist_24;
+        } else if (type == NoteContentClassifier.EditorType.ADVANCED) {
+            res = R.drawable.ic_markdown;
+        } else {
+            res = 0;
+        }
+        final Drawable icon = res == 0 ? null : ContextCompat.getDrawable(title.getContext(), res);
+        title.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, null, null, null);
+        title.setCompoundDrawablePadding(res == 0 ? 0 : (int) title.getResources().getDimension(R.dimen.spacer_1x));
+        TextViewCompat.setCompoundDrawableTintList(title,
+            ColorStateList.valueOf(ContextCompat.getColor(title.getContext(), R.color.fg_default)));
     }
 
     public void setTracker(SelectionTracker<Long> tracker) {
