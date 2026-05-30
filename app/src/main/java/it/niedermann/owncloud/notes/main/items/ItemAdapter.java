@@ -36,9 +36,9 @@ import com.google.android.material.card.MaterialCardView;
 import com.nextcloud.android.common.ui.theme.utils.ColorRole;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -88,7 +88,7 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
     private final ExecutorService classifyExecutor = Executors.newSingleThreadExecutor();
     private final Handler classifyMainHandler = new Handler(Looper.getMainLooper());
     // Cache of the inferred editor type per note id; cleared whenever the list is refreshed.
-    private final Map<Long, NoteContentClassifier.EditorType> typeCache = new HashMap<>();
+    private final Map<Long, NoteContentClassifier.EditorType> typeCache = new ConcurrentHashMap<>();
 
     public <T extends Context & NoteClickListener> ItemAdapter(@NonNull T context, boolean gridView) {
         this.noteClickListener = context;
@@ -257,6 +257,9 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
             return;
         }
         setTitleIcon(title, null);
+        if (classifyExecutor.isShutdown()) {
+            return;
+        }
         classifyExecutor.submit(() -> {
             final Note full = repo.getNoteById(id);
             if (full == null) {
@@ -286,6 +289,12 @@ public class ItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> i
         title.setCompoundDrawablePadding(res == 0 ? 0 : (int) title.getResources().getDimension(R.dimen.spacer_1x));
         TextViewCompat.setCompoundDrawableTintList(title,
             ColorStateList.valueOf(ContextCompat.getColor(title.getContext(), R.color.fg_default)));
+    }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        classifyExecutor.shutdownNow();
     }
 
     public void setTracker(SelectionTracker<Long> tracker) {

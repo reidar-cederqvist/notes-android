@@ -71,6 +71,23 @@ public class ListNoteEditFragment extends BaseNoteFragment {
             autoSave();
         }
     };
+    // One shared, stateless watcher reused by every item row.
+    private final TextWatcher dirtyWatcher = new TextWatcher() {
+        @Override
+        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            // no-op
+        }
+
+        @Override
+        public void onTextChanged(CharSequence s, int start, int before, int count) {
+            // no-op
+        }
+
+        @Override
+        public void afterTextChanged(Editable s) {
+            markDirty();
+        }
+    };
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -199,7 +216,7 @@ public class ListNoteEditFragment extends BaseNoteFragment {
         applyCheckedStyle(editText, item.checked);
 
         checkbox.setOnClickListener(v -> onItemCheckedChanged(row, checkbox));
-        editText.addTextChangedListener(dirtyWatcher());
+        editText.addTextChangedListener(dirtyWatcher);
         editText.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_NEXT || actionId == EditorInfo.IME_ACTION_DONE) {
                 addItemAfter(row);
@@ -398,25 +415,6 @@ public class ListNoteEditFragment extends BaseNoteFragment {
             final EditText editText = row.findViewById(R.id.editText);
             out.add(new MarkdownTaskList.Item(tag.indent, tag.bullet, checkbox.isChecked(), editText.getText().toString()));
         }
-    }
-
-    private TextWatcher dirtyWatcher() {
-        return new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                // no-op
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                // no-op
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                markDirty();
-            }
-        };
     }
 
     private void markDirty() {
