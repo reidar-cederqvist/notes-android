@@ -47,23 +47,18 @@ public class NoteContentClassifierTest {
     }
 
     @Test
-    public void titledCheckboxListIsList() {
-        assertEquals(LIST, NoteContentClassifier.classify("Groceries\n- [ ] Milk\n- [x] Bread"));
-    }
-
-    @Test
-    public void markdownTitleOnListIsList_titleRoundTrippedVerbatim() {
-        // Option A: a list may have a markdown title line (heading, bold, link, ...). It is still a
-        // LIST; the list editor's contract is to round-trip the title line VERBATIM, keeping it
-        // lossless. The classifier therefore does NOT screen the title line for markdown.
-        assertEquals(LIST, NoteContentClassifier.classify("# Groceries\n- [ ] Milk\n- [x] Bread"));
-        assertEquals(LIST, NoteContentClassifier.classify("**Groceries**\n- [ ] Milk"));
-        assertEquals(LIST, NoteContentClassifier.classify("[Trip](https://example.com)\n- [ ] Pack bags"));
+    public void titleLineBeforeChecklistIsAdvanced() {
+        // A note that starts with a title/heading before the checkboxes is NOT a clean list; it is
+        // treated as ADVANCED (the heading is editable as markdown there). A list's name lives in the
+        // note title, not in the content.
+        assertEquals(ADVANCED, NoteContentClassifier.classify("Groceries\n- [ ] Milk\n- [x] Bread"));
+        assertEquals(ADVANCED, NoteContentClassifier.classify("# Groceries\n- [ ] Milk"));
+        assertEquals(ADVANCED, NoteContentClassifier.classify("**Groceries**\n- [ ] Milk"));
     }
 
     @Test
     public void indentedChildItemsStillList() {
-        assertEquals(LIST, NoteContentClassifier.classify("Tasks\n- [ ] Parent\n    - [x] Child"));
+        assertEquals(LIST, NoteContentClassifier.classify("- [ ] Parent\n    - [x] Child"));
     }
 
     @Test
@@ -81,7 +76,6 @@ public class NoteContentClassifierTest {
     public void newlySeededEmptyListItemIsList() {
         // a freshly created list is seeded with one empty checkbox so it classifies as LIST
         assertEquals(LIST, NoteContentClassifier.classify("- [ ] "));
-        assertEquals(LIST, NoteContentClassifier.classify("Shopping\n- [ ] "));
     }
 
     // ---- ADVANCED (the conservative "don't misinterpret" guarantees) ----

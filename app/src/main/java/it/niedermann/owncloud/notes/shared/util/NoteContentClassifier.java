@@ -89,16 +89,12 @@ public final class NoteContentClassifier {
             return EditorType.SIMPLE;
         }
 
-        // LIST iff either:
-        //   (a) every non-empty line is a task item (a list without a separate title line), or
-        //   (b) the first line is a non-task title and every remaining non-empty line is a task item.
-        // The title line in case (b) may contain markdown (e.g. "# Groceries"). This stays lossless
-        // because the list editor's contract is to round-trip the title line VERBATIM -- it must not
-        // reformat or strip it (Option A).
+        // LIST iff every non-empty line is a task item. A note that starts with a title/heading line
+        // before the checkboxes is NOT a list: it is treated as ADVANCED, where the heading is
+        // editable as markdown. A list's name lives in the note title, not in its content (the
+        // checklist editor has no title field). Errors still only go toward ADVANCED, never a lossy
+        // downgrade.
         if (allTaskItems(lines, 0)) {
-            return EditorType.LIST;
-        }
-        if (!isTaskItem(lines.get(0)) && lines.size() > 1 && allTaskItems(lines, 1)) {
             return EditorType.LIST;
         }
 
