@@ -92,6 +92,12 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
     }
 
     @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         binding.editContent.addTextChangedListener(textWatcher);
@@ -166,13 +172,18 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
 
     @Override
     protected void scrollToY(int scrollY) {
-        if (binding != null) {
-            binding.scrollView.post(() -> binding.scrollView.setScrollY(scrollY));
+        if (binding == null) {
+            return;
         }
+        final var scrollView = binding.scrollView;
+        scrollView.post(() -> scrollView.setScrollY(scrollY));
     }
 
     @Override
     protected String getContent() {
+        if (binding == null) {
+            return note == null ? "" : note.getContent();
+        }
         final var editable = binding.editContent.getText();
         return editable == null ? "" : editable.toString();
     }

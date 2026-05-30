@@ -84,6 +84,11 @@ public final class MarkdownTaskList {
         return new Parsed(title, items);
     }
 
+    /** @return true if the list is a single empty, unchecked placeholder item (a "blank" list). */
+    public static boolean isSingleEmptyPlaceholder(@NonNull List<Item> items) {
+        return items.size() == 1 && !items.get(0).checked && items.get(0).text.trim().isEmpty();
+    }
+
     @NonNull
     public static String serialize(@Nullable String title, @NonNull List<Item> items) {
         final StringBuilder sb = new StringBuilder();

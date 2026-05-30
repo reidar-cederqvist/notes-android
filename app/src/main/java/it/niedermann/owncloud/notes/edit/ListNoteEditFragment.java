@@ -135,7 +135,7 @@ public class ListNoteEditFragment extends BaseNoteFragment {
         binding.checkedContainer.removeAllViews();
         // A note saved as a list always keeps at least one item; a lone empty placeholder is not
         // rendered (the list just shows no items plus the "add item" row).
-        if (!isSinglePlaceholder(parsed.items)) {
+        if (!MarkdownTaskList.isSingleEmptyPlaceholder(parsed.items)) {
             for (final var item : parsed.items) {
                 final View row = createRow(item);
                 (item.checked ? binding.checkedContainer : binding.itemContainer).addView(row);
@@ -384,10 +384,6 @@ public class ListNoteEditFragment extends BaseNoteFragment {
         markDirty();
     }
 
-    private static boolean isSinglePlaceholder(@NonNull List<MarkdownTaskList.Item> items) {
-        return items.size() == 1 && !items.get(0).checked && items.get(0).text.trim().isEmpty();
-    }
-
     @Override
     protected String getContent() {
         if (binding == null) {
@@ -472,9 +468,11 @@ public class ListNoteEditFragment extends BaseNoteFragment {
 
     @Override
     protected void scrollToY(int scrollY) {
-        if (binding != null) {
-            binding.scrollView.post(() -> binding.scrollView.setScrollY(scrollY));
+        if (binding == null) {
+            return;
         }
+        final var scrollView = binding.scrollView;
+        scrollView.post(() -> scrollView.setScrollY(scrollY));
     }
 
     @Override

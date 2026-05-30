@@ -82,9 +82,7 @@ public class NoteUtil {
         // contains a checkbox marker, to avoid the cost for ordinary notes.
         if (trimmedContent.contains("[ ]") || trimmedContent.contains("[x]") || trimmedContent.contains("[X]")) {
             final var taskList = MarkdownTaskList.parse(content);
-            if (taskList.items.size() == 1
-                    && !taskList.items.get(0).checked
-                    && taskList.items.get(0).text.trim().isEmpty()) {
+            if (MarkdownTaskList.isSingleEmptyPlaceholder(taskList.items)) {
                 trimmedContent = taskList.title == null ? "" : taskList.title.trim();
             }
         }
