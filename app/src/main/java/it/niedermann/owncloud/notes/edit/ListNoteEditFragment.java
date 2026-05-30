@@ -11,10 +11,6 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Paint;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.DragEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -42,7 +38,6 @@ import java.util.List;
 import it.niedermann.owncloud.notes.R;
 import it.niedermann.owncloud.notes.databinding.FragmentNoteListEditBinding;
 import it.niedermann.owncloud.notes.persistence.entity.Note;
-import it.niedermann.owncloud.notes.shared.model.ISyncCallback;
 import it.niedermann.owncloud.notes.shared.util.MarkdownTaskList;
 
 /**
@@ -52,48 +47,13 @@ import it.niedermann.owncloud.notes.shared.util.MarkdownTaskList;
  * Tapping a checkbox moves the item to the checked section. The content is stored as GFM task-list
  * markdown via {@link MarkdownTaskList}, so the round-trip is lossless.
  */
-public class ListNoteEditFragment extends BaseNoteFragment {
+public class ListNoteEditFragment extends AutoSaveNoteFragment {
 
-    private static final long DELAY = 2000; // wait after typing before saving
-    private static final long DELAY_AFTER_SYNC = 5000; // wait after saving before next save
     private static final int MENU_ID_UNCHECK_ALL = -100;
     private static final int MENU_ID_EDIT_AS_MARKDOWN = -101;
 
     private FragmentNoteListEditBinding binding;
-    private Handler handler;
-    private boolean saveActive;
-    private boolean unsavedEdit;
-    private boolean loading;
     private boolean initialized;
-
-    private final Runnable runAutoSave = () -> {
-        if (unsavedEdit) {
-            autoSave();
-        }
-    };
-    // One shared, stateless watcher reused by every item row.
-    private final TextWatcher dirtyWatcher = new TextWatcher() {
-        @Override
-        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            // no-op
-        }
-
-        @Override
-        public void onTextChanged(CharSequence s, int start, int before, int count) {
-            // no-op
-        }
-
-        @Override
-        public void afterTextChanged(Editable s) {
-            markDirty();
-        }
-    };
-
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        handler = new Handler(Looper.getMainLooper());
-    }
 
     @Nullable
     @Override
@@ -106,14 +66,6 @@ public class ListNoteEditFragment extends BaseNoteFragment {
     public void onDestroyView() {
         super.onDestroyView();
         binding = null;
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        if (handler != null) {
-            handler.removeCallbacks(runAutoSave);
-        }
     }
 
     @Override
@@ -411,43 +363,6 @@ public class ListNoteEditFragment extends BaseNoteFragment {
             final EditText editText = row.findViewById(R.id.editText);
             out.add(new MarkdownTaskList.Item(tag.indent, tag.bullet, checkbox.isChecked(), editText.getText().toString()));
         }
-    }
-
-    private void markDirty() {
-        if (loading) {
-            return;
-        }
-        unsavedEdit = true;
-        if (!saveActive) {
-            handler.removeCallbacks(runAutoSave);
-            handler.postDelayed(runAutoSave, DELAY);
-        }
-    }
-
-    @Override
-    protected void saveNote(@Nullable ISyncCallback callback) {
-        super.saveNote(callback);
-        unsavedEdit = false;
-    }
-
-    private void autoSave() {
-        saveActive = true;
-        saveNote(new ISyncCallback() {
-            @Override
-            public void onFinish() {
-                onSaved();
-            }
-
-            @Override
-            public void onScheduled() {
-                onSaved();
-            }
-
-            private void onSaved() {
-                saveActive = false;
-                handler.postDelayed(runAutoSave, DELAY_AFTER_SYNC);
-            }
-        });
     }
 
     private void showKeyboard(@NonNull EditText editText) {

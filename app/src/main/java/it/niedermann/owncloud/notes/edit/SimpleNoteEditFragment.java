@@ -8,11 +8,7 @@ package it.niedermann.owncloud.notes.edit;
 
 import android.content.Context;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.text.Editable;
 import android.text.TextUtils;
-import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -28,7 +24,6 @@ import androidx.annotation.Nullable;
 import it.niedermann.owncloud.notes.R;
 import it.niedermann.owncloud.notes.databinding.FragmentNoteSimpleEditBinding;
 import it.niedermann.owncloud.notes.persistence.entity.Note;
-import it.niedermann.owncloud.notes.shared.model.ISyncCallback;
 
 /**
  * A deliberately minimal, plain-text note editor for non-technical users: just a single text area,
@@ -39,50 +34,12 @@ import it.niedermann.owncloud.notes.shared.model.ISyncCallback;
  * Reuses the load/save/autosave lifecycle of {@link BaseNoteFragment}; the content is plain text,
  * which is valid markdown, so the round-trip is lossless.
  */
-public class SimpleNoteEditFragment extends BaseNoteFragment {
+public class SimpleNoteEditFragment extends AutoSaveNoteFragment {
 
-    private static final long DELAY = 2000; // wait after typing before saving
-    private static final long DELAY_AFTER_SYNC = 5000; // wait after saving before next save
     private static final int MENU_ID_EDIT_AS_MARKDOWN = -101;
 
     private FragmentNoteSimpleEditBinding binding;
-    private Handler handler;
-    private boolean saveActive;
-    private boolean unsavedEdit;
     private boolean keyboardShown = false;
-    private TextWatcher textWatcher;
-
-    private final Runnable runAutoSave = () -> {
-        if (unsavedEdit) {
-            autoSave();
-        }
-    };
-
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        handler = new Handler(Looper.getMainLooper());
-        textWatcher = new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                // no-op
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                // no-op
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                unsavedEdit = true;
-                if (!saveActive) {
-                    handler.removeCallbacks(runAutoSave);
-                    handler.postDelayed(runAutoSave, DELAY);
-                }
-            }
-        };
-    }
 
     @Nullable
     @Override
@@ -100,7 +57,7 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
     @Override
     public void onResume() {
         super.onResume();
-        binding.editContent.addTextChangedListener(textWatcher);
+        binding.editContent.addTextChangedListener(dirtyWatcher);
         if (keyboardShown) {
             openSoftKeyboard();
         }
@@ -109,8 +66,7 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
     @Override
     public void onPause() {
         super.onPause();
-        binding.editContent.removeTextChangedListener(textWatcher);
-        handler.removeCallbacks(runAutoSave);
+        binding.editContent.removeTextChangedListener(dirtyWatcher);
     }
 
     @Override
@@ -186,32 +142,6 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
         }
         final var editable = binding.editContent.getText();
         return editable == null ? "" : editable.toString();
-    }
-
-    @Override
-    protected void saveNote(@Nullable ISyncCallback callback) {
-        super.saveNote(callback);
-        unsavedEdit = false;
-    }
-
-    private void autoSave() {
-        saveActive = true;
-        saveNote(new ISyncCallback() {
-            @Override
-            public void onFinish() {
-                onSaved();
-            }
-
-            @Override
-            public void onScheduled() {
-                onSaved();
-            }
-
-            private void onSaved() {
-                saveActive = false;
-                handler.postDelayed(runAutoSave, DELAY_AFTER_SYNC);
-            }
-        });
     }
 
     private void openSoftKeyboard() {
