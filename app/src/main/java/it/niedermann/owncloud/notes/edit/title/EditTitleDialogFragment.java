@@ -58,6 +58,9 @@ public class EditTitleDialogFragment extends BrandedDialogFragment {
 
         if (savedInstanceState == null) {
             binding.title.setText(oldTitle);
+            // Select the whole title so typing replaces it (common when renaming the default name);
+            // tapping in the field instead drops the cursor there and deselects.
+            binding.title.setSelection(0, binding.title.length());
         }
 
         final MaterialAlertDialogBuilder alertDialogBuilder = new MaterialAlertDialogBuilder(requireContext())
