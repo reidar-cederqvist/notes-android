@@ -15,6 +15,12 @@
     <string name="create_note_type_list">Checklist</string>
     <string name="create_note_type_advanced">Advanced note</string>
     <string name="simple_note_hint">Note</string>
+    <string name="list_add_item">Add item</string>
+    <string name="list_remove_item">Remove item</string>
+    <string name="list_uncheck_all">Uncheck all</string>
+    <string name="list_reorder">Reorder</string>
+    <string name="action_edit_as_markdown">Edit as markdown</string>
+    <string name="list_new_title">New list</string>
     <string name="welcome_text">Welcome to %1$s</string>
     <string name="action_settings">Settings</string>
     <string name="action_trashbin">Deleted notes</string>

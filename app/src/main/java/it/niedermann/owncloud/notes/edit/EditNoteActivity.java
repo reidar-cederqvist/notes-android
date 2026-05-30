@@ -329,12 +329,14 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
             case SIMPLE -> {
                 return SimpleNoteEditFragment.newInstance(accountId, noteId);
             }
+            case LIST -> {
+                return ListNoteEditFragment.newInstance(accountId, noteId);
+            }
             case ADVANCED -> {
                 // honor the user's preferred markdown view-mode (edit / preview / direct edit)
                 return getNoteFragment(accountId, noteId, null);
             }
             default -> {
-                // LIST: placeholder until ListNoteEditFragment exists
                 return NoteEditFragment.newInstance(accountId, noteId);
             }
         }
@@ -345,7 +347,9 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
         final var mode = getPreferenceMode(getAccountId());
         final var prefValueDirectEdit = getString(R.string.pref_value_mode_direct_edit);
 
-        // TODO: route LIST -> ListNoteEditFragment once implemented.
+        if (editorType == NoteContentClassifier.EditorType.LIST) {
+            return ListNoteEditFragment.newInstanceWithNewNote(newNote);
+        }
         if (editorType == NoteContentClassifier.EditorType.SIMPLE) {
             return SimpleNoteEditFragment.newInstanceWithNewNote(newNote);
         }
@@ -402,12 +406,16 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
         }
 
         final var editorType = parseEditorType(intent.getStringExtra(PARAM_EDITOR_TYPE));
-        // Seed a brand-new list with one empty checkbox so it opens as (and re-classifies as) a list.
+        final String title;
         if (editorType == NoteContentClassifier.EditorType.LIST && content.isEmpty()) {
+            // Seed a brand-new list with one empty checkbox; its name lives in the note title.
             content = "- [ ] ";
+            title = getString(R.string.list_new_title);
+        } else {
+            title = NoteUtil.generateNonEmptyNoteTitle(content, this);
         }
 
-        final var newNote = new Note(null, Calendar.getInstance(), NoteUtil.generateNonEmptyNoteTitle(content, this), content, categoryTitle, favorite, null, false, false);
+        final var newNote = new Note(null, Calendar.getInstance(), title, content, categoryTitle, favorite, null, false, false);
         fragment = getNewNoteFragment(newNote, editorType);
         replaceFragment();
     }

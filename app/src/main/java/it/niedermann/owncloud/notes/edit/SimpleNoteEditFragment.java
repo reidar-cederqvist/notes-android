@@ -15,6 +15,8 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
@@ -41,6 +43,7 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
 
     private static final long DELAY = 2000; // wait after typing before saving
     private static final long DELAY_AFTER_SYNC = 5000; // wait after saving before next save
+    private static final int MENU_ID_EDIT_AS_MARKDOWN = -101;
 
     private FragmentNoteSimpleEditBinding binding;
     private Handler handler;
@@ -118,6 +121,12 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
     }
 
     @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+        menu.add(Menu.NONE, MENU_ID_EDIT_AS_MARKDOWN, 100, R.string.action_edit_as_markdown);
+    }
+
+    @Override
     public void onPrepareOptionsMenu(@NonNull Menu menu) {
         super.onPrepareOptionsMenu(menu);
         // Plain-text simple editor: hide the markdown view-mode toggles.
@@ -129,6 +138,24 @@ public class SimpleNoteEditFragment extends BaseNoteFragment {
         if (preview != null) {
             preview.setVisible(false);
         }
+        // "Edit as markdown" needs the note's id from the launch intent, which a brand-new note
+        // doesn't have yet -> only offer it for already-saved notes.
+        final var editAsMarkdown = menu.findItem(MENU_ID_EDIT_AS_MARKDOWN);
+        if (editAsMarkdown != null) {
+            editAsMarkdown.setVisible(!isNew);
+        }
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == MENU_ID_EDIT_AS_MARKDOWN) {
+            saveNote(null);
+            if (listener != null) {
+                listener.changeMode(NoteFragmentListener.Mode.EDIT, true);
+            }
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Nullable

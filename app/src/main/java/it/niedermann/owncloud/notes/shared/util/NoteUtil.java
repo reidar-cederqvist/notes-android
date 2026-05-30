@@ -71,10 +71,19 @@ public class NoteUtil {
      */
     @NonNull
     public static String generateNoteExcerpt(@NonNull String content, @Nullable String title) {
-        final var trimmedContent = content.trim();
+        var trimmedContent = content.trim();
 
         if (isHtml(trimmedContent)) {
             return sanitizeHtml(trimmedContent);
+        }
+
+        // A checklist whose only item is an empty placeholder should not show a stray checkbox in
+        // the preview; fall back to just its title (if any).
+        final var taskList = MarkdownTaskList.parse(content);
+        if (taskList.items.size() == 1
+                && !taskList.items.get(0).checked
+                && taskList.items.get(0).text.trim().isEmpty()) {
+            trimmedContent = taskList.title == null ? "" : taskList.title.trim();
         }
 
         final var emojiReplacedWithCheckBoxesContent = replaceCheckboxesWithEmojis(trimmedContent);
