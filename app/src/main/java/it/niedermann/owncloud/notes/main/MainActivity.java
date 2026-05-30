@@ -121,6 +121,7 @@ import it.niedermann.owncloud.notes.shared.model.NavigationCategory;
 import it.niedermann.owncloud.notes.shared.model.NoteClickListener;
 import it.niedermann.owncloud.notes.shared.util.CustomAppGlideModule;
 import it.niedermann.owncloud.notes.shared.util.DisplayUtils;
+import it.niedermann.owncloud.notes.shared.util.NoteContentClassifier;
 import it.niedermann.owncloud.notes.shared.util.NoteUtil;
 import it.niedermann.owncloud.notes.shared.util.ShareUtil;
 
@@ -246,15 +247,7 @@ public class MainActivity extends LockedActivity implements NoteClickListener, A
                 }
             }
 
-            fabCreate.setOnClickListener((View view) -> {
-                final var createIntent = new Intent(getApplicationContext(), EditNoteActivity.class);
-                createIntent.putExtra(EditNoteActivity.PARAM_CATEGORY, selectedCategory);
-                if (activityBinding.searchView.getQuery().length() > 0) {
-                    createIntent.putExtra(EditNoteActivity.PARAM_CONTENT, activityBinding.searchView.getQuery().toString());
-                    invalidateOptionsMenu();
-                }
-                startActivityForResult(createIntent, REQUEST_CODE_CREATE_NOTE);
-            });
+            fabCreate.setOnClickListener((View view) -> showCreateNoteChooser(selectedCategory));
         });
         mainViewModel.getNotesListLiveData().observe(this, notes -> {
             // https://stackoverflow.com/a/37342327
@@ -889,6 +882,39 @@ public class MainActivity extends LockedActivity implements NoteClickListener, A
                 }
             }
         }
+    }
+
+    /**
+     * Lets the user pick which kind of note to create (simple note / checklist / advanced note)
+     * before opening the editor. The chosen {@link NoteContentClassifier.EditorType} is forwarded to
+     * {@link EditNoteActivity}.
+     */
+    private void showCreateNoteChooser(@NonNull NavigationCategory category) {
+        final CharSequence[] labels = {
+                getString(R.string.create_note_type_simple),
+                getString(R.string.create_note_type_list),
+                getString(R.string.create_note_type_advanced),
+        };
+        final NoteContentClassifier.EditorType[] types = {
+                NoteContentClassifier.EditorType.SIMPLE,
+                NoteContentClassifier.EditorType.LIST,
+                NoteContentClassifier.EditorType.ADVANCED,
+        };
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.action_create)
+                .setItems(labels, (dialog, which) -> createNote(category, types[which]))
+                .show();
+    }
+
+    private void createNote(@NonNull NavigationCategory category, @NonNull NoteContentClassifier.EditorType type) {
+        final var createIntent = new Intent(getApplicationContext(), EditNoteActivity.class);
+        createIntent.putExtra(EditNoteActivity.PARAM_CATEGORY, category);
+        createIntent.putExtra(EditNoteActivity.PARAM_EDITOR_TYPE, type.name());
+        if (activityBinding.searchView.getQuery().length() > 0) {
+            createIntent.putExtra(EditNoteActivity.PARAM_CONTENT, activityBinding.searchView.getQuery().toString());
+            invalidateOptionsMenu();
+        }
+        startActivityForResult(createIntent, REQUEST_CODE_CREATE_NOTE);
     }
 
     @Override

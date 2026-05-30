@@ -50,6 +50,7 @@ import it.niedermann.owncloud.notes.persistence.NotesRepository;
 import it.niedermann.owncloud.notes.persistence.entity.Account;
 import it.niedermann.owncloud.notes.persistence.entity.Note;
 import it.niedermann.owncloud.notes.shared.model.NavigationCategory;
+import it.niedermann.owncloud.notes.shared.util.NoteContentClassifier;
 import it.niedermann.owncloud.notes.shared.util.NoteUtil;
 import it.niedermann.owncloud.notes.shared.util.ShareUtil;
 
@@ -65,6 +66,7 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
     public static final String PARAM_CATEGORY = "category";
     public static final String PARAM_CONTENT = "content";
     public static final String PARAM_FAVORITE = "favorite";
+    public static final String PARAM_EDITOR_TYPE = "editorType";
 
     private ActivityEditBinding binding;
 
@@ -224,18 +226,35 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
      * @param discardState If true, the state of the fragment will be discarded and a new fragment will be created
      */
     private void launchExistingNote(long accountId, long noteId, @Nullable final String mode, final boolean discardState) {
-        // save state of the fragment in order to resume with the same note and originalNote
-        runOnUiThread(() -> {
-            Fragment.SavedState savedState = null;
-            if (fragment != null && !discardState) {
-                savedState = getSupportFragmentManager().saveFragmentInstanceState(fragment);
-            }
-            fragment = getNoteFragment(accountId, noteId, mode);
-            if (savedState != null) {
-                fragment.setInitialSavedState(savedState);
-            }
-            replaceFragment();
-        });
+        if (mode != null) {
+            // Explicit view-mode (e.g. the user toggled edit/preview) -> keep it, no classification.
+            runOnUiThread(() -> replaceExistingNoteFragment(getNoteFragment(accountId, noteId, mode), discardState));
+        } else {
+            // Default open: classify the content (off the main thread) to pick the editor type.
+            new Thread(() -> {
+                final Note note = repo.getNoteById(noteId);
+                final NoteContentClassifier.EditorType type = note == null
+                        ? NoteContentClassifier.EditorType.ADVANCED
+                        : NoteContentClassifier.classify(note.getContent());
+                runOnUiThread(() -> replaceExistingNoteFragment(getNoteFragmentForType(accountId, noteId, type), discardState));
+            }).start();
+        }
+    }
+
+    /**
+     * Saves the current fragment's instance state (unless discarded), then swaps in the given
+     * fragment. Must be called on the UI thread.
+     */
+    private void replaceExistingNoteFragment(@NonNull BaseNoteFragment newFragment, final boolean discardState) {
+        Fragment.SavedState savedState = null;
+        if (fragment != null && !discardState) {
+            savedState = getSupportFragmentManager().saveFragmentInstanceState(fragment);
+        }
+        fragment = newFragment;
+        if (savedState != null) {
+            fragment.setInitialSavedState(savedState);
+        }
+        replaceFragment();
     }
 
     private void replaceFragment() {
@@ -300,17 +319,45 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
     }
 
 
+    /**
+     * Maps an inferred {@link NoteContentClassifier.EditorType} to a fragment for an existing note.
+     * TODO: route SIMPLE -&gt; SimpleNoteEditFragment and LIST -&gt; ListNoteEditFragment once implemented.
+     */
     @NonNull
-    private BaseNoteFragment getNewNoteFragment(Note newNote) {
-        final var mode = getPreferenceMode(getAccountId());
+    private BaseNoteFragment getNoteFragmentForType(long accountId, long noteId, @NonNull NoteContentClassifier.EditorType type) {
+        switch (type) {
+            case ADVANCED -> {
+                // honor the user's preferred markdown view-mode (edit / preview / direct edit)
+                return getNoteFragment(accountId, noteId, null);
+            }
+            default -> {
+                return NoteEditFragment.newInstance(accountId, noteId);
+            }
+        }
+    }
 
+    @NonNull
+    private BaseNoteFragment getNewNoteFragment(Note newNote, @NonNull NoteContentClassifier.EditorType editorType) {
+        final var mode = getPreferenceMode(getAccountId());
         final var prefValueDirectEdit = getString(R.string.pref_value_mode_direct_edit);
 
-        if (mode.equals(prefValueDirectEdit)) {
+        // TODO: route SIMPLE -> SimpleNoteEditFragment and LIST -> ListNoteEditFragment once implemented.
+        if (editorType == NoteContentClassifier.EditorType.ADVANCED && mode.equals(prefValueDirectEdit)) {
             return NoteDirectEditFragment.newInstanceWithNewNote(newNote);
-        } else {
-            return NoteEditFragment.newInstanceWithNewNote(newNote);
         }
+        return NoteEditFragment.newInstanceWithNewNote(newNote);
+    }
+
+    @NonNull
+    private NoteContentClassifier.EditorType parseEditorType(@Nullable String name) {
+        if (name != null) {
+            try {
+                return NoteContentClassifier.EditorType.valueOf(name);
+            } catch (IllegalArgumentException ignored) {
+                // unknown value -> fall through to default
+            }
+        }
+        return NoteContentClassifier.EditorType.ADVANCED;
     }
 
     /**
@@ -346,8 +393,15 @@ public class EditNoteActivity extends LockedActivity implements BaseNoteFragment
         if (content == null) {
             content = "";
         }
+
+        final var editorType = parseEditorType(intent.getStringExtra(PARAM_EDITOR_TYPE));
+        // Seed a brand-new list with one empty checkbox so it opens as (and re-classifies as) a list.
+        if (editorType == NoteContentClassifier.EditorType.LIST && content.isEmpty()) {
+            content = "- [ ] ";
+        }
+
         final var newNote = new Note(null, Calendar.getInstance(), NoteUtil.generateNonEmptyNoteTitle(content, this), content, categoryTitle, favorite, null, false, false);
-        fragment = getNewNoteFragment(newNote);
+        fragment = getNewNoteFragment(newNote, editorType);
         replaceFragment();
     }
 
